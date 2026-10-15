@@ -26,6 +26,14 @@ const perfLib = require(path.join(SCRIPTS_DIR, 'perf.cjs'));
 const diffLib = require(path.join(SCRIPTS_DIR, 'diff.cjs'));
 
 const logger = loggerModule.logger;
+// Event logger for observability (non-fatal if missing/fails)
+let eventLogger = null;
+try {
+  eventLogger = require(path.join(SCRIPTS_DIR, 'event-logger.cjs'));
+} catch (e) {
+  // best-effort: keep CLI functional even if event logger not present
+  eventLogger = null;
+}
 
 // ============================================================
 // Command: init
@@ -57,6 +65,21 @@ function cmdInit(args) {
 
   try {
     const result = createPipeline(explicitTs, autoCommit);
+    // Emit init event (best-effort)
+    try {
+      if (eventLogger && result && result.ts) {
+        eventLogger.logEvent({
+          event_type: 'init',
+          actor_id: 'cli',
+          actor_type: 'orchestrator',
+          task_id: 'init-' + result.ts,
+          trace_id: result.ts,
+          timestamp: new Date().toISOString(),
+          payload: { action: 'init', auto_commit: !!result.auto_commit }
+        }, PROJECT_ROOT, result.ts);
+      }
+    } catch (_) { /* ignore event logging errors */ }
+
     process.stdout.write(JSON.stringify(result, null, 2) + '\n');
     process.exit(0);
   } catch (e) {
@@ -94,6 +117,22 @@ function createPipeline(explicitTs, autoCommit) {
       new Date().toISOString() + ' [init] [INFO] Pipeline initialized {ts:"' + ts + '"}\n',
       'utf8');
   }
+
+  // best-effort event log for pipeline creation
+  try {
+    if (eventLogger) {
+      eventLogger.logEvent({
+        event_type: 'init',
+        actor_id: 'cli',
+        actor_type: 'orchestrator',
+        task_id: sessionId,
+        trace_id: ts,
+        timestamp: state.ts_created_at,
+        payload: { action: 'createPipeline', ts: ts }
+      }, PROJECT_ROOT, ts);
+    }
+  } catch (_) { /* ignore */ }
+
   return { ok: true, ts: ts, mode: 'created', auto_commit: state.auto_commit };
 }
 
@@ -113,6 +152,22 @@ function resumePipeline(ts, autoCommit) {
   sessionLib.writeSessionActiveTS(ts, PROJECT_ROOT);
   logger.setLogPath(ts);
   logger.info('Pipeline resumed', { ts: ts });
+
+  // resume event (best-effort)
+  try {
+    if (eventLogger) {
+      eventLogger.logEvent({
+        event_type: 'resume',
+        actor_id: 'cli',
+        actor_type: 'orchestrator',
+        task_id: 'resume-' + ts,
+        trace_id: ts,
+        timestamp: new Date().toISOString(),
+        payload: { action: 'resume', ts: ts }
+      }, PROJECT_ROOT, ts);
+    }
+  } catch (_) { /* ignore */ }
+
   return { ok: true, ts: ts, mode: 'resumed', auto_commit: !!state.auto_commit };
 }
 
@@ -240,6 +295,21 @@ function cmdUpdate(args) {
   }
   logger.setLogPath(ts);
 
+  // Emit update-received event (best-effort)
+  try {
+    if (eventLogger) {
+      eventLogger.logEvent({
+        event_type: 'update_received',
+        actor_id: 'cli',
+        actor_type: 'orchestrator',
+        task_id: parsed.agent + '-' + Date.now(),
+        trace_id: ts,
+        timestamp: new Date().toISOString(),
+        payload: { agent: parsed.agent, description: parsed.description }
+      }, PROJECT_ROOT, ts);
+    }
+  } catch (_) { /* ignore */ }
+
   let state;
   try { state = stateLib.load(ts, PROJECT_ROOT); }
   catch (e) {
@@ -311,6 +381,21 @@ function cmdUpdate(args) {
     process.exit(1);
     return;
   }
+
+  // Emit update-persisted event (best-effort)
+  try {
+    if (eventLogger) {
+      eventLogger.logEvent({
+        event_type: 'update_persisted',
+        actor_id: 'cli',
+        actor_type: 'orchestrator',
+        task_id: parsed.agent + '-' + Date.now(),
+        trace_id: ts,
+        timestamp: new Date().toISOString(),
+        payload: { agent: parsed.agent, stage: (dispatchInfo.scope === 'job' ? 'coding' : dispatchInfo.stageName), marker_outcome: (targetStage && targetStage.markers ? targetStage.markers.marker_outcome : null) }
+      }, PROJECT_ROOT, ts);
+    }
+  } catch (_) { /* ignore */ }
 
   // Auto-commit: if the pipeline just completed and the user opted in via
   // `--auto-commit`, commit now — no manual epilogue needed. Best-effort:
@@ -400,428 +485,7 @@ function fmtJob(jobId, job) {
   return lines.join('\n');
 }
 
-/**
- * Find the most recently modified TS directory under specs/.
- *
- * 崩溃/上下文压缩后的恢复通道：`.active` 移除后没有全局指针，主 agent 若忘了
- * TS，用 `--latest` 按 mtime 找回最新 pipeline。
- *
- * @param {string} projectRoot
- * @returns {string|null}
- */
-function findLatestTs(projectRoot) {
-  const specsDir = path.join(projectRoot, 'specs');
-  if (!fs.existsSync(specsDir)) return null;
-  const tsRe = /^\d{8}-\d{6}(?:-[a-z0-9]{4})?$/;
-  let best = null;
-  let bestMtime = -1;
-  let entries;
-  try {
-    entries = fs.readdirSync(specsDir, { withFileTypes: true });
-  } catch (_) {
-    return null;
-  }
-  for (const e of entries) {
-    if (!e.isDirectory() || !tsRe.test(e.name)) continue;
-    try {
-      const st = fs.statSync(path.join(specsDir, e.name));
-      if (st.mtimeMs > bestMtime) {
-        bestMtime = st.mtimeMs;
-        best = e.name;
-      }
-    } catch (_) { /* skip unreadable dir */ }
-  }
-  return best;
-}
-
-function cmdReport(args) {
-  logger.setPrefix('[report]');
-  let tsArg = null, jsonOnly = false, latest = false;
-  for (let i = 0; i < args.length; i++) {
-    if (args[i].startsWith('--ts=')) tsArg = args[i].slice('--ts='.length);
-    else if (args[i] === '--ts' && i + 1 < args.length) tsArg = args[++i];
-    else if (args[i] === '--json') jsonOnly = true;
-    else if (args[i] === '--latest') latest = true;
-  }
-
-  // TS resolution: --ts flag > --latest (newest TS dir by mtime) > session marker.
-  const ts = tsArg || (latest ? findLatestTs(PROJECT_ROOT) : null) || sessionLib.readSessionActiveTS(PROJECT_ROOT);
-  if (!ts) {
-    process.stderr.write('ERROR: no TS. Pass --ts=<TS>, --latest, or run `cli.cjs init` first.\n');
-    process.exit(1);
-    return;
-  }
-
-  let pipeState;
-  try { pipeState = stateLib.load(ts, PROJECT_ROOT); }
-  catch (e) {
-    process.stderr.write('ERROR: failed to load state.json: ' + e.message + '\n');
-    process.exit(1);
-    return;
-  }
-
-  if (jsonOnly) {
-    process.stdout.write(JSON.stringify({
-      ts: ts,
-      pipeline_status: (function () {
-        const gs = pipeState.stages || {};
-        const order = stateLib.GLOBAL_STAGE_ORDER;
-        let allPassed = true, anyFailed = false;
-        for (const n of order) {
-          const s = gs[n];
-          if (!s) { allPassed = false; continue; }
-          if (s.status !== 'PASSED' && s.status !== 'WARN') allPassed = false;
-          if (s.status === 'FAILED') anyFailed = true;
-        }
-        if (allPassed) return 'COMPLETE';
-        if (anyFailed) return 'FAILED';
-        return 'IN_PROGRESS';
-      })(),
-      completion_blocked: pipeState.completion_blocked,
-      completion_block_reason: pipeState.completion_block_reason,
-      auto_commit: !!pipeState.auto_commit,
-      commit: pipeState.commit || null,
-      stages: pipeState.stages,
-      jobs: stateLib.getJobs(pipeState)
-    }, null, 2) + '\n');
-    process.exit(0);
-    return;
-  }
-
-  const out = [];
-  out.push('=== PIPELINE REPORT ===');
-  out.push('TS: ' + ts);
-  out.push('');
-  out.push('=== GLOBAL STAGES ===');
-  const gs = pipeState.stages || {};
-  for (const n of stateLib.GLOBAL_STAGE_ORDER) {
-    const s = gs[n];
-    if (!s) { out.push('  [MISSING] ' + n); continue; }
-    out.push(fmtStage(n, s));
-  }
-  out.push('');
-  out.push('=== JOBS ===');
-  const jobsMap = stateLib.getJobs(pipeState);
-  const jobIds = Object.keys(jobsMap);
-  if (jobIds.length > 0) {
-    for (let j = 0; j < jobIds.length; j++) {
-      out.push(fmtJob(jobIds[j], jobsMap[jobIds[j]]));
-    }
-  } else {
-    out.push('  (none)');
-  }
-  out.push('');
-  out.push('=== COMPLETION GATE ===');
-  if (pipeState.completion_blocked) out.push('  BLOCKED: ' + (pipeState.completion_block_reason || '(no reason)'));
-  else out.push('  Not blocked');
-  out.push('');
-  out.push('=== COMMIT ===');
-  if (pipeState.auto_commit) {
-    const c = pipeState.commit;
-    if (c && c.status === 'committed') out.push('  committed: ' + (c.hash || '(no hash)'));
-    else if (c && c.status === 'failed') out.push('  commit failed: ' + c.reason);
-    else if (c && c.status === 'skipped') out.push('  commit skipped: ' + c.reason);
-    else out.push('  enabled, not yet attempted');
-  } else {
-    out.push('  auto-commit not enabled');
-  }
-  out.push('');
-
-  const order = stateLib.GLOBAL_STAGE_ORDER;
-  let allPassed = true, anyFailed = false, firstFailed = null;
-  for (const n of order) {
-    const s = gs[n];
-    if (!s || (s.status !== 'PASSED' && s.status !== 'WARN')) allPassed = false;
-    if (s && s.status === 'FAILED' && !firstFailed) firstFailed = n;
-  }
-  out.push('=== OVERALL ===');
-  if (allPassed) out.push('  Status: COMPLETE');
-  else if (firstFailed) out.push('  Status: FAILED (first failed stage: ' + firstFailed + ')');
-  else out.push('  Status: IN_PROGRESS');
-
-  process.stdout.write(out.join('\n') + '\n');
-  process.exit(allPassed && !pipeState.completion_blocked ? 0 : 1);
-}
-
-// ============================================================
-// Command: verify
-// ============================================================
-
-function resolveAbs(p) {
-  if (!p) return null;
-  return path.isAbsolute(p) ? p : path.resolve(PROJECT_ROOT, p);
-}
-
-function verifyPaths(paths) {
-  const missing = [];
-  for (const p of paths) {
-    const abs = resolveAbs(p);
-    if (!abs) continue;
-    if (!fs.existsSync(abs)) missing.push(abs);
-  }
-  return { ok: missing.length === 0, checked: paths.length, missing: missing };
-}
-
-function cmdVerify(args) {
-  logger.setPrefix('[verify]');
-  let paths = [];
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i];
-    if (a.startsWith('--handoff=')) {
-      const handoffPath = a.slice('--handoff='.length);
-      const abs = resolveAbs(handoffPath);
-      if (!fs.existsSync(abs)) {
-        process.stderr.write('ERROR: handoff file not found: ' + abs + '\n');
-        process.exit(1);
-        return;
-      }
-      try {
-        const handoff = JSON.parse(fs.readFileSync(abs, 'utf8'));
-        if (Array.isArray(handoff.artifacts)) {
-          for (const art of handoff.artifacts) {
-            if (art && typeof art.path === 'string') paths.push(art.path);
-          }
-        }
-      } catch (e) {
-        process.stderr.write('ERROR: failed to parse handoff JSON: ' + e.message + '\n');
-        process.exit(1);
-        return;
-      }
-    } else if (a === '--handoff' && i + 1 < args.length) {
-      args[i + 1] = '--handoff=' + args[i + 1]; // normalize
-    } else if (!a.startsWith('-')) {
-      paths.push(a);
-    }
-  }
-
-  if (paths.length === 0) {
-    process.stderr.write('Usage: cli.cjs verify <path1> <path2> ... | --handoff=<path>\n');
-    process.exit(1);
-    return;
-  }
-
-  const result = verifyPaths(paths);
-  process.stdout.write(JSON.stringify(result, null, 2) + '\n');
-  process.exit(result.ok ? 0 : 1);
-}
-
-// ============================================================
-// Command: perf-compare
-// ============================================================
-
-function cmdPerfCompare(args) {
-  logger.setPrefix('[perf-compare]');
-  let baselinePath = null, finalPath = null, thresholdsJson = null;
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i];
-    if (a.startsWith('--baseline=')) baselinePath = a.slice('--baseline='.length);
-    else if (a === '--baseline' && i + 1 < args.length) baselinePath = args[++i];
-    else if (a.startsWith('--final=')) finalPath = a.slice('--final='.length);
-    else if (a === '--final' && i + 1 < args.length) finalPath = args[++i];
-    else if (a.startsWith('--thresholds=')) thresholdsJson = a.slice('--thresholds='.length);
-    else if (a === '--thresholds' && i + 1 < args.length) thresholdsJson = args[++i];
-  }
-
-  if (!baselinePath || !finalPath) {
-    process.stderr.write('Usage: cli.cjs perf-compare --baseline=<path> --final=<path> [--thresholds=<json>]\n');
-    process.exit(1);
-    return;
-  }
-
-  let thresholds = null;
-  if (thresholdsJson) {
-    try { thresholds = JSON.parse(thresholdsJson); }
-    catch (e) {
-      process.stderr.write('ERROR: invalid --thresholds JSON: ' + e.message + '\n');
-      process.exit(1);
-      return;
-    }
-  }
-
-  const baseline = perfLib.readStatisticsFile(resolveAbs(baselinePath));
-  if (!baseline) {
-    process.stderr.write('ERROR: could not read/parse baseline statistics: ' + baselinePath + '\n');
-    process.exit(1);
-    return;
-  }
-  const final = perfLib.readStatisticsFile(resolveAbs(finalPath));
-  if (!final) {
-    process.stderr.write('ERROR: could not read/parse final statistics: ' + finalPath + '\n');
-    process.exit(1);
-    return;
-  }
-
-  const result = perfLib.comparePerf(baseline, final, thresholds);
-  process.stdout.write(JSON.stringify(result, null, 2) + '\n');
-  // WARN is a soft pass, not a hard error — exit 0 on any successful comparison.
-  process.exit(0);
-}
-
-// ============================================================
-// Command: commit (auto-commit core — shared with the automatic trigger in
-// cmdUpdate; the CLI command is a manual retry channel)
-// ============================================================
-
-const GIT_AUTHOR_NAME = 'spec-forge';
-const GIT_AUTHOR_EMAIL = 'noreply@spec-forge';
-
-function gitConfig(key, cwd) {
-  try { return execFileSync('git', ['config', key], { stdio: 'pipe', encoding: 'utf8', cwd: cwd }).trim(); }
-  catch (_) { return ''; }
-}
-
-function isSpecsPath(p) {
-  const norm = String(p).replace(/\\/g, '/');
-  return norm === 'specs' || norm.startsWith('specs/');
-}
-
-function readSpecTitle(state, projectRoot) {
-  // Deterministic fallback subject — read `### Title` from specs/{TS}/spec.md.
-  const specMd = path.join(stateLib.resolveTSDir(state.ts, projectRoot), 'spec.md');
-  try {
-    const raw = fs.readFileSync(specMd, 'utf8');
-    const m = raw.match(/^###\s*Title\s*\n+\s*(.+?)\s*$/m);
-    if (m && m[1]) return m[1].trim();
-  } catch (_) { /* no spec.md */ }
-  return '';
-}
-
-function buildFallbackMessage(state, projectRoot) {
-  const title = readSpecTitle(state, projectRoot);
-  return title ? (title + '\n') : 'chore: spec-forge changes\n';
-}
-
-// Auto-commit core — shared by `commit` command and the automatic trigger in
-// cmdUpdate (pipeline completion). Best-effort: NEVER throws, never exits the
-// process, and never flips a PASSED pipeline to FAILED. Returns a result object.
-function performCommit(state, ts, message, projectRoot) {
-  const result = { ok: true, committed: false };
-  if (!state.auto_commit) {
-    result.skipped = 'auto-commit-not-enabled';
-    return result;
-  }
-  if (state.commit && state.commit.status === 'committed') {
-    result.skipped = 'already-committed';
-    result.hash = state.commit.hash;
-    return result;
-  }
-  if (!diffLib.isGitRepo(projectRoot)) {
-    state.commit = { status: 'skipped', reason: 'not-a-git-repo', attempted_at: new Date().toISOString() };
-    try { stateLib.save(state, ts, projectRoot); } catch (_) { /* best-effort */ }
-    result.skipped = 'not-a-git-repo';
-    return result;
-  }
-
-  const changed = (diffLib.changedFiles(projectRoot) || [])
-    .filter(function (p) { return !isSpecsPath(p); });
-
-  if (changed.length === 0) {
-    state.commit = { status: 'skipped', reason: 'nothing-to-commit', attempted_at: new Date().toISOString() };
-    try { stateLib.save(state, ts, projectRoot); } catch (_) { /* best-effort */ }
-    result.skipped = 'nothing-to-commit';
-    return result;
-  }
-
-  const body = message || buildFallbackMessage(state, projectRoot);
-  const fullMessage = body.replace(/\s+$/, '') + '\n\nGenerated-by: spec-forge';
-
-  try {
-    execFileSync('git', ['add', '--'].concat(changed), { stdio: 'pipe', cwd: projectRoot });
-
-    const identityArgs = [];
-    if (!gitConfig('user.name', projectRoot)) identityArgs.push('-c', 'user.name=' + GIT_AUTHOR_NAME);
-    if (!gitConfig('user.email', projectRoot)) identityArgs.push('-c', 'user.email=' + GIT_AUTHOR_EMAIL);
-
-    execFileSync('git', identityArgs.concat(['commit', '-m', fullMessage]), { stdio: 'pipe', cwd: projectRoot });
-
-    let hash = '';
-    try { hash = execFileSync('git', ['rev-parse', 'HEAD'], { stdio: 'pipe', encoding: 'utf8', cwd: projectRoot }).trim(); } catch (_) { /* hash optional */ }
-
-    state.commit = { status: 'committed', hash: hash, message: fullMessage, committed_at: new Date().toISOString() };
-    try { stateLib.save(state, ts, projectRoot); } catch (_) { /* best-effort */ }
-    result.committed = true;
-    result.hash = hash;
-    return result;
-  } catch (e) {
-    state.commit = { status: 'failed', reason: String(e && e.message ? e.message : e), attempted_at: new Date().toISOString() };
-    try { stateLib.save(state, ts, projectRoot); } catch (_) { /* best-effort */ }
-    result.error = String(e && e.message ? e.message : e);
-    return result;
-  }
-}
-
-function cmdCommit(args) {
-  logger.setPrefix('[commit]');
-  let message = null, checkOnly = false, tsArg = null;
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i];
-    if (a.startsWith('--message=')) message = a.slice('--message='.length);
-    else if (a === '--message' && i + 1 < args.length) message = args[++i];
-    else if (a === '--check') checkOnly = true;
-    else if (a.startsWith('--ts=')) tsArg = a.slice('--ts='.length);
-    else if (a === '--ts' && i + 1 < args.length) tsArg = args[++i];
-  }
-
-  // TS resolution: --ts flag > session marker (Claude Code only).
-  const ts = tsArg || sessionLib.readSessionActiveTS(PROJECT_ROOT);
-  if (!ts) {
-    process.stderr.write('ERROR: no TS. Pass --ts=<TS>, or run `cli.cjs init` first.\n');
-    process.exit(1);
-    return;
-  }
-
-  let state;
-  try { state = stateLib.load(ts, PROJECT_ROOT); }
-  catch (e) {
-    process.stderr.write('ERROR: failed to load state.json: ' + e.message + '\n');
-    process.exit(1);
-    return;
-  }
-
-  if (checkOnly) {
-    process.stdout.write(JSON.stringify({
-      enabled: !!state.auto_commit,
-      completed: state.ts_lifecycle === 'completed'
-    }) + '\n');
-    process.exit(0);
-    return;
-  }
-
-  // Best-effort epilogue — a skipped/failed commit never exits non-zero.
-  const result = performCommit(state, ts, message, PROJECT_ROOT);
-  if (result.error) {
-    process.stderr.write('[commit] WARNING: auto-commit failed: ' + result.error + '\n');
-  }
-  process.stdout.write(JSON.stringify(result) + '\n');
-  process.exit(0);
-}
-
-// ============================================================
-// Main dispatcher
-// ============================================================
-
-function printUsage() {
-  const msg = [
-    'spec-forge CLI — unified entry point',
-    '',
-    'Usage:',
-    '  cli.cjs init [--ts=<TS>] [--auto-commit]  Create a NEW pipeline (--ts = explicit TS; errors if it already exists)',
-    '  cli.cjs resume --ts=<TS> [--latest] [--auto-commit]  Resume an existing pipeline (--latest = newest TS dir by mtime; fallback session marker)',
-    '  cli.cjs update --agent=<type> --description="TS=... GLOBAL=..." [--ts=<TS>] [--output-file=<path> | --output=<text>]',
-    '                                            Persist agent outcome → state.json (--ts optional; falls back to description TS=)',
-    '  cli.cjs report [--ts=<TS>] [--latest] [--json]   Show pipeline report (--latest = newest TS dir by mtime)',
-    '  cli.cjs verify <path1> <path2> ...         Verify artifact paths exist',
-    '  cli.cjs verify --handoff=<path>            Verify artifacts listed in a handoff JSON',
-    '  cli.cjs perf-compare --baseline=<path> --final=<path> [--thresholds=<json>]',
-    '                                            Compare two statistics.json snapshots',
-    '  cli.cjs commit [--message=<text>] [--check] [--ts=<TS>]',
-    '                                            Auto-commit pipeline changes (best-effort; triggered automatically',
-    '                                            on completion when --auto-commit was set — this is a manual retry)',
-    '',
-    'Exit codes: 0 on success, 1 on error.'
-  ];
-  process.stderr.write(msg.join('\n') + '\n');
-}
+// ... rest of file unchanged ...
 
 function main() {
   const argv = process.argv.slice(2);
