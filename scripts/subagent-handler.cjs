@@ -23,8 +23,35 @@ const logger = loggerModule.logger;
 
 logger.setPrefix('[subagent-handler]');
 
+// best-effort event logger (non-fatal)
+let eventLogger = null;
+try {
+  eventLogger = require(path.join(SCRIPTS_DIR, 'event-logger.cjs'));
+} catch (e) {
+  eventLogger = null;
+}
+
 const { STAGE_STATUS, JOB_STATUS } = stateLib;
 const { GLOBAL_STAGES, VERIFICATION_STAGES } = stateLib;
+
+function _recordEvent(eventType, actorId, actorType, taskId, traceId, payload) {
+  try {
+    if (!eventLogger) return;
+    if (!traceId) return;
+    const ev = {
+      event_type: eventType,
+      actor_id: actorId,
+      actor_type: actorType,
+      task_id: taskId || ('task-' + Date.now()),
+      trace_id: traceId,
+      timestamp: new Date().toISOString(),
+      payload: payload || {}
+    };
+    eventLogger.logEvent(ev, PROJECT_ROOT, traceId);
+  } catch (_) {
+    // swallow instrumentation errors to keep flow non-fatal
+  }
+}
 
 // ---- Target stage resolution ----
 
@@ -271,6 +298,7 @@ function reconcileHandoffFiles(state, ts, projectRoot) {
       stateLib.setJobCodingStage(state, jobId, outcome);
       stateLib.recomputeJobStatus(state, jobId);
       anyClosed = true;
+      _recordEvent('handoff_closed', 'subagent-handler', 'orchestrator', jobId, ts, { file: file, outcome: outcome });
       logger.info('Closed job coding via handoff fallback', {
         jobId: jobId, outcome: outcome, file: file
       });
@@ -302,6 +330,7 @@ function reconcileHandoffFiles(state, ts, projectRoot) {
       stateLib.setGlobalStage(state, stageName, gOutcome);
       stateLib.recomputeGlobalStageStatus(state, stageName);
       anyClosed = true;
+      _recordEvent('handoff_closed', 'subagent-handler', 'orchestrator', stageName, ts, { file: file, outcome: gOutcome });
       logger.info('Closed global stage via handoff fallback', {
         stageName: stageName, outcome: gOutcome, file: file
       });
@@ -359,6 +388,7 @@ function reconcileHandoffFiles(state, ts, projectRoot) {
       }
       stateLib.recomputeVerificationStatus(state);
       anyClosed = true;
+      _recordEvent('handoff_closed', 'subagent-handler', 'orchestrator', subStage, ts, { file: file, outcome: sub.status });
       logger.info('Closed verification sub-stage via handoff fallback', {
         subStage: subStage, outcome: sub.status, file: file
       });
@@ -381,11 +411,17 @@ function handleSubagentStop(state, dispatchInfo, agentType, output, exitStatus) 
     return;
   }
 
+  var ts = state.ts || '';
+  _recordEvent('start', agentType || 'agent', 'agent', (dispatchInfo.scope === 'job' ? dispatchInfo.jobId : dispatchInfo.stageName), ts, {
+    scope: dispatchInfo.scope,
+    stageName: dispatchInfo.stageName,
+    subStage: dispatchInfo.subStage,
+    jobId: dispatchInfo.jobId
+  });
+
   if (!targetStage.markers || typeof targetStage.markers !== 'object') {
     targetStage.markers = {};
   }
-
-  var ts = state.ts || '';
 
   var handoff = markers.parseHandoff(output);
 
@@ -407,6 +443,9 @@ function handleSubagentStop(state, dispatchInfo, agentType, output, exitStatus) 
 
     if (!validateHandoffArtifacts(targetStage, handoff)) {
       logger.warn(agentType + ' FAIL: HANDOFF artifacts not found on disk');
+      _recordEvent('fail', agentType, 'agent', (dispatchInfo.scope === 'job' ? dispatchInfo.jobId : dispatchInfo.stageName), ts, {
+        reason: 'artifacts_missing', scope: dispatchInfo.scope
+      });
       _recomputeAfterStop(state, dispatchInfo);
       return;
     }
@@ -423,15 +462,9 @@ function handleSubagentStop(state, dispatchInfo, agentType, output, exitStatus) 
     }
 
     var decision = (handoff.decision || '').toUpperCase();
-    // WARN is a soft pass — treat as PASSED so the wave proceeds. The WARN
-    // signal is preserved in markers.review_decision (copied above) for
-    // evidence-verifier review.
     var isPass = (decision === 'PASS' || decision === 'APPROVE' || decision === 'WARN');
     var isWarn = (decision === 'WARN');
 
-    // Content-manifest gate: coding + wave testing must describe WHAT they did
-    // in a durable manifest, not just pass/fail markers. Enforced only on a
-    // PASS decision — a FAIL already failed for its own reason.
     var manifestGate = _checkManifestGate(state, dispatchInfo);
     if (isPass && manifestGate && manifestGate.ok === false) {
       isPass = false;
@@ -460,13 +493,7 @@ function handleSubagentStop(state, dispatchInfo, agentType, output, exitStatus) 
       logger.warn(agentType + ' ' + (decision || 'FAIL') + ' (handoff JSON)', { scope: dispatchInfo.scope });
     }
 
-    // Verification sub-stage: the verification loop reads sub-stage STATUS directly
-    // (not markers). fix + WARN is a non-code failure → sub-stage WARN, which
-    // recomputeVerificationStatus maps to the node-level WARN (soft pass).
     if (dispatchInfo.scope === 'verification') {
-      // WARN is a soft pass for the regression sub-stage (perf regression) and
-      // the fix sub-stage (non-code failure). Both map the verification node to
-      // WARN via recomputeVerificationStatus. Other sub-stages stay PASS/FAIL.
       var isWarnSubStage = isWarn &&
         (dispatchInfo.subStage === VERIFICATION_STAGES.FIX ||
          dispatchInfo.subStage === VERIFICATION_STAGES.REGRESSION);
@@ -484,7 +511,6 @@ function handleSubagentStop(state, dispatchInfo, agentType, output, exitStatus) 
     if (agentType === 'task-decomposer' && isPass) {
       var cycle = _initJobsFromHandoff(state, handoff);
       if (cycle) {
-        // Job dependency cycle — override the PASS decision.
         targetStage.markers.marker_outcome = 'FAILED';
         targetStage.markers.completed = false;
         if (!Array.isArray(targetStage.markers.validation_errors)) {
@@ -532,6 +558,12 @@ function handleSubagentStop(state, dispatchInfo, agentType, output, exitStatus) 
       }
     }
 
+    _recordEvent('complete', agentType, 'agent', (dispatchInfo.scope === 'job' ? dispatchInfo.jobId : dispatchInfo.stageName), ts, {
+      scope: dispatchInfo.scope,
+      outcome: targetStage.markers ? targetStage.markers.marker_outcome : null,
+      artifacts: (targetStage.artifacts || []).slice(0, 10)
+    });
+
     _recomputeAfterStop(state, dispatchInfo);
 
     return;
@@ -543,6 +575,9 @@ function handleSubagentStop(state, dispatchInfo, agentType, output, exitStatus) 
     'No HANDOFF JSON block found in agent output — agents must produce HANDOFF_BEGIN...HANDOFF_END'
   ];
   logger.warn(agentType + ' FAIL: no HANDOFF JSON in output', { scope: dispatchInfo.scope });
+  _recordEvent('fail', agentType, 'agent', (dispatchInfo.scope === 'job' ? dispatchInfo.jobId : dispatchInfo.stageName), ts, {
+    reason: 'no_handoff_json', scope: dispatchInfo.scope
+  });
 
   _recomputeAfterStop(state, dispatchInfo);
 }
