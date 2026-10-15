@@ -1,0 +1,26 @@
+# Runtime pipeline artifacts (state, logs, reports, snapshots)
+specs/
+
+# WorkBuddy workspace metadata
+.workbuddy/
+
+# Dependencies
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Corrupt state backups (defensive — also under specs/)
+state.json.corrupt.*

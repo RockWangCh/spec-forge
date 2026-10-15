@@ -1,0 +1,544 @@
+{
+  "schema_version": 6,
+  "session_id": "pipeline-20260818-165553-2i5b",
+  "turn_started_at": "2026-08-18T08:55:53.367Z",
+  "turn_count": 0,
+  "ts": "20260818-165553-2i5b",
+  "ts_lifecycle": "completed",
+  "ts_created_at": "2026-08-18T08:55:53.367Z",
+  "ts_completed_at": "2026-08-18T09:46:44.055Z",
+  "pipeline_mode": "wave-pipeline",
+  "stages": {
+    "spec-check": {
+      "status": "PASSED",
+      "started_at": null,
+      "completed_at": "2026-08-18T08:57:55.960Z",
+      "attempt_count": 0,
+      "markers": {
+        "spec_check_decision": "PASS",
+        "marker_outcome": "PASSED",
+        "completed": true,
+        "self_validated": true
+      },
+      "artifacts": [
+        "/data/src/tile-server/specs/20260818-165553-2i5b/spec-check-report.json",
+        "/data/src/tile-server/specs/20260818-165553-2i5b/spec.md"
+      ],
+      "runs": [
+        {
+          "agent_type": "spec-checker",
+          "agent_id": "cli-1787043475961",
+          "outcome": "PASSED",
+          "started_at": "2026-08-18T08:57:55.961Z",
+          "stopped_at": "2026-08-18T08:57:55.961Z",
+          "exit_status": "completed",
+          "source": "update-state"
+        }
+      ]
+    },
+    "task-decompose": {
+      "status": "PASSED",
+      "started_at": null,
+      "completed_at": "2026-08-18T09:03:12.238Z",
+      "attempt_count": 0,
+      "markers": {
+        "marker_outcome": "PASSED",
+        "completed": true,
+        "self_validated": true
+      },
+      "artifacts": [
+        "/data/src/tile-server/specs/20260818-165553-2i5b/job-manifest.json"
+      ],
+      "runs": [
+        {
+          "agent_type": "task-decomposer",
+          "agent_id": "cli-1787043792239",
+          "outcome": "PASSED",
+          "started_at": "2026-08-18T09:03:12.239Z",
+          "stopped_at": "2026-08-18T09:03:12.239Z",
+          "exit_status": "completed",
+          "source": "update-state"
+        }
+      ]
+    },
+    "baseline-regression": {
+      "status": "PASSED",
+      "started_at": null,
+      "completed_at": "2026-08-18T09:04:54.784Z",
+      "attempt_count": 0,
+      "markers": {
+        "failed_tests": [],
+        "attribution": "baseline",
+        "marker_outcome": "PASSED",
+        "completed": true,
+        "self_validated": true
+      },
+      "artifacts": [
+        "/data/src/tile-server/specs/20260818-165553-2i5b/baseline-regression-report.md"
+      ],
+      "runs": [
+        {
+          "agent_type": "regression-runner",
+          "agent_id": "cli-1787043894786",
+          "outcome": "PASSED",
+          "started_at": "2026-08-18T09:04:54.786Z",
+          "stopped_at": "2026-08-18T09:04:54.786Z",
+          "exit_status": "completed",
+          "source": "update-state"
+        }
+      ]
+    },
+    "implementation": {
+      "status": "PASSED",
+      "started_at": "2026-08-18T09:08:26.256Z",
+      "completed_at": "2026-08-18T09:42:52.588Z",
+      "waves": [
+        {
+          "index": 0,
+          "label": "Interface Foundation",
+          "jobs": [
+            {
+              "id": "J0-1",
+              "layer": null,
+              "description": "Add field-mode switch (setEmitFrame) and reset() to NdtpResponseComposer; field mode makes okBegin/okEnd/notFound/dbError/parameterError/fieldNotFound no-ops while okAddField/okAddNonExistField still emit bytes",
+              "files": [],
+              "produces": [],
+              "depends_on": [],
+              "agent_type": "implementer",
+              "wave": 0,
+              "attempt_count": 0,
+              "max_retries": 2,
+              "coding": {
+                "status": "PASSED",
+                "started_at": "2026-08-18T09:04:57.399Z",
+                "completed_at": "2026-08-18T09:07:08.449Z",
+                "attempt_count": 0,
+                "markers": {
+                  "marker_outcome": "PASSED",
+                  "completed": true,
+                  "self_validated": true
+                },
+                "artifacts": [
+                  "/data/src/tile-server/src/ndtp_response.h",
+                  "/data/src/tile-server/src/ndtp_response.cpp"
+                ],
+                "runs": [
+                  {
+                    "agent_type": "implementer",
+                    "agent_id": "cli-1787044028450",
+                    "outcome": "PASSED",
+                    "started_at": "2026-08-18T09:04:57.399Z",
+                    "stopped_at": "2026-08-18T09:07:08.450Z",
+                    "exit_status": "completed",
+                    "source": "update-state"
+                  }
+                ]
+              },
+              "status": "PASSED"
+            },
+            {
+              "id": "J0-2",
+              "layer": null,
+              "description": "Expose a public field pre-validation method on the DataTable base class (reuse _checkFields logic) so the batch path can validate fields once before the loop",
+              "files": [],
+              "produces": [],
+              "depends_on": [],
+              "agent_type": "implementer",
+              "wave": 0,
+              "attempt_count": 0,
+              "max_retries": 2,
+              "coding": {
+                "status": "PASSED",
+                "started_at": "2026-08-18T09:04:57.399Z",
+                "completed_at": "2026-08-18T09:07:33.895Z",
+                "attempt_count": 0,
+                "markers": {
+                  "marker_outcome": "PASSED",
+                  "completed": true,
+                  "self_validated": true
+                },
+                "artifacts": [
+                  "/data/src/tile-server/src/data_table.h",
+                  "/data/src/tile-server/src/data_table.cpp"
+                ],
+                "runs": [
+                  {
+                    "agent_type": "implementer",
+                    "agent_id": "cli-1787044053897",
+                    "outcome": "PASSED",
+                    "started_at": "2026-08-18T09:04:57.399Z",
+                    "stopped_at": "2026-08-18T09:07:33.897Z",
+                    "exit_status": "completed",
+                    "source": "update-state"
+                  }
+                ]
+              },
+              "status": "PASSED"
+            },
+            {
+              "id": "J0-3",
+              "layer": null,
+              "description": "Add optional route-level maxBatchKeys config item (default 25) to ConfigItem/ServerConfig parsing with a getter",
+              "files": [],
+              "produces": [],
+              "depends_on": [],
+              "agent_type": "implementer",
+              "wave": 0,
+              "attempt_count": 0,
+              "max_retries": 2,
+              "coding": {
+                "status": "PASSED",
+                "started_at": "2026-08-18T09:04:57.399Z",
+                "completed_at": "2026-08-18T09:08:23.390Z",
+                "attempt_count": 0,
+                "markers": {
+                  "marker_outcome": "PASSED",
+                  "completed": true,
+                  "self_validated": true
+                },
+                "artifacts": [
+                  "/data/src/tile-server/src/server_config.h",
+                  "/data/src/tile-server/src/server_config.cpp"
+                ],
+                "runs": [
+                  {
+                    "agent_type": "implementer",
+                    "agent_id": "cli-1787044103391",
+                    "outcome": "PASSED",
+                    "started_at": "2026-08-18T09:04:57.399Z",
+                    "stopped_at": "2026-08-18T09:08:23.391Z",
+                    "exit_status": "completed",
+                    "source": "update-state"
+                  }
+                ]
+              },
+              "status": "PASSED"
+            }
+          ],
+          "status": "PASSED",
+          "attempt_count": 0,
+          "max_retries": 2,
+          "started_at": "2026-08-18T09:08:26.256Z",
+          "completed_at": "2026-08-18T09:19:42.939Z",
+          "rounds": [
+            {
+              "index": 0,
+              "testing": {
+                "status": "PASSED",
+                "started_at": "2026-08-18T09:08:26.256Z",
+                "completed_at": "2026-08-18T09:15:36.952Z",
+                "attempt_count": 0,
+                "markers": {
+                  "test_result": "PASS",
+                  "tests_total": 18,
+                  "tests_passed": 18,
+                  "tests_failed": 0,
+                  "new_tests_added": 13,
+                  "existing_tests_still_pass": 5,
+                  "build_status": "PASS (make.py exit 0, no compile errors)",
+                  "coverage": "new-code ~100% (every new branch in J0-1/J0-2/J0-3 exercised; no gcov/lcov configured in this project)",
+                  "ac_coverage": "3/3 in-scope contracts fully covered (J0-1 NdtpResponseComposer field mode, J0-2 DataTable::checkFields, J0-3 ConfigItem maxBatchKeys)",
+                  "marker_outcome": "PASSED",
+                  "completed": true,
+                  "self_validated": true
+                },
+                "artifacts": [
+                  "/data/src/tile-server/src/ndtp_response_unittest.cpp",
+                  "/data/src/tile-server/src/data_table_checkfields_unittest.cpp",
+                  "/data/src/tile-server/src/server_config_unittest.cpp"
+                ],
+                "runs": [
+                  {
+                    "agent_type": "test-generator",
+                    "agent_id": "cli-1787044536954",
+                    "outcome": "PASSED",
+                    "started_at": "2026-08-18T09:08:26.256Z",
+                    "stopped_at": "2026-08-18T09:15:36.954Z",
+                    "exit_status": "completed",
+                    "source": "update-state"
+                  }
+                ]
+              },
+              "review": {
+                "status": "PASSED",
+                "started_at": "2026-08-18T09:15:39.236Z",
+                "completed_at": "2026-08-18T09:19:40.643Z",
+                "attempt_count": 0,
+                "markers": {
+                  "review_decision": "APPROVE",
+                  "review_summary": "Wave 0 (J0-1/J0-2/J0-3) correct: field mode + reset, checkFields delegation, maxBatchKeys default 25; 18/18 tests pass; 1 MEDIUM forward-note for J1-1 header emission ordering, 1 LOW config hardening.",
+                  "marker_outcome": "PASSED",
+                  "completed": true,
+                  "self_validated": true
+                },
+                "artifacts": [
+                  "/data/src/tile-server/specs/20260818-165553-2i5b/review-report-wave-0.md"
+                ],
+                "runs": [
+                  {
+                    "agent_type": "code-reviewer",
+                    "agent_id": "cli-1787044780644",
+                    "outcome": "PASSED",
+                    "started_at": "2026-08-18T09:15:39.236Z",
+                    "stopped_at": "2026-08-18T09:19:40.644Z",
+                    "exit_status": "completed",
+                    "source": "update-state"
+                  }
+                ]
+              },
+              "fix": {
+                "status": "SKIPPED",
+                "started_at": null,
+                "completed_at": "2026-08-18T09:19:42.938Z",
+                "attempt_count": 0,
+                "markers": {},
+                "artifacts": [],
+                "runs": []
+              }
+            }
+          ],
+          "coding_status": "PASSED"
+        },
+        {
+          "index": 1,
+          "label": "Request Service Batch Path",
+          "jobs": [
+            {
+              "id": "J1-1",
+              "layer": null,
+              "description": "Add comma-detection batch branch in TileService::query: reset field mode at entry, split key with stack array + hard cap, enforce maxBatchKeys, validate fields once, loop query with silent missing-key skip, exit field mode and okEnd, reuse single-key response header logic; single-key branch stays byte-identical",
+              "files": [],
+              "produces": [],
+              "depends_on": [
+                "J0-1",
+                "J0-2",
+                "J0-3"
+              ],
+              "agent_type": "implementer",
+              "wave": 1,
+              "attempt_count": 0,
+              "max_retries": 2,
+              "coding": {
+                "status": "PASSED",
+                "started_at": "2026-08-18T09:19:42.939Z",
+                "completed_at": "2026-08-18T09:28:59.610Z",
+                "attempt_count": 0,
+                "markers": {
+                  "marker_outcome": "PASSED",
+                  "completed": true,
+                  "self_validated": true
+                },
+                "artifacts": [
+                  "/data/src/tile-server/src/tile_service.cpp",
+                  "/data/src/tile-server/src/tile_service.h"
+                ],
+                "runs": [
+                  {
+                    "agent_type": "implementer",
+                    "agent_id": "cli-1787045339613",
+                    "outcome": "PASSED",
+                    "started_at": "2026-08-18T09:19:42.939Z",
+                    "stopped_at": "2026-08-18T09:28:59.613Z",
+                    "exit_status": "completed",
+                    "source": "update-state"
+                  }
+                ]
+              },
+              "status": "PASSED"
+            }
+          ],
+          "status": "PASSED",
+          "attempt_count": 0,
+          "max_retries": 2,
+          "started_at": "2026-08-18T09:29:03.118Z",
+          "completed_at": "2026-08-18T09:42:52.588Z",
+          "rounds": [
+            {
+              "index": 0,
+              "testing": {
+                "status": "PASSED",
+                "started_at": "2026-08-18T09:29:03.118Z",
+                "completed_at": "2026-08-18T09:38:37.462Z",
+                "attempt_count": 0,
+                "markers": {
+                  "test_result": "PASS",
+                  "tests_total": 18,
+                  "tests_passed": 18,
+                  "tests_failed": 0,
+                  "new_tests_added": 0,
+                  "existing_tests_still_pass": 18,
+                  "build_status": "PASS (make.py exit 0; src/tile_service.cpp recompiled + lib/tile-server relinked — full compile+link gate for J1-1)",
+                  "coverage": "J1-1 batch path verified END-TO-END (byte-level) + byte-level code inspection; no gcov/lcov configured in this project. Per spec Testing Decisions, no Request/ServiceIo mock gtest seam is introduced (J1-1 adds no new gtest cases by design).",
+                  "ac_coverage": "6/6 in-scope ACs covered (AC1 single OK record+grouping, AC2 silent missing-key skip, AC3 all-missing empty OK, AC4 maxBatchKeys cap, AC5 single-key byte-identical, AC6 whole-batch ETag/304) via end-to-end FastCGI + byte-level code inspection + existing 18 gtest single-key regression",
+                  "marker_outcome": "PASSED",
+                  "completed": true,
+                  "self_validated": true
+                },
+                "artifacts": [],
+                "runs": [
+                  {
+                    "agent_type": "test-generator",
+                    "agent_id": "cli-1787045917464",
+                    "outcome": "PASSED",
+                    "started_at": "2026-08-18T09:29:03.118Z",
+                    "stopped_at": "2026-08-18T09:38:37.464Z",
+                    "exit_status": "completed",
+                    "source": "update-state"
+                  }
+                ]
+              },
+              "review": {
+                "status": "PASSED",
+                "started_at": "2026-08-18T09:38:43.080Z",
+                "completed_at": "2026-08-18T09:42:48.117Z",
+                "attempt_count": 0,
+                "markers": {
+                  "review_decision": "APPROVE",
+                  "marker_outcome": "PASSED",
+                  "completed": true,
+                  "self_validated": true
+                },
+                "artifacts": [
+                  "/data/src/tile-server/specs/20260818-165553-2i5b/review-report-wave-1.md"
+                ],
+                "runs": [
+                  {
+                    "agent_type": "code-reviewer",
+                    "agent_id": "cli-1787046168119",
+                    "outcome": "PASSED",
+                    "started_at": "2026-08-18T09:38:43.080Z",
+                    "stopped_at": "2026-08-18T09:42:48.119Z",
+                    "exit_status": "completed",
+                    "source": "update-state"
+                  }
+                ]
+              },
+              "fix": {
+                "status": "SKIPPED",
+                "started_at": null,
+                "completed_at": "2026-08-18T09:42:52.587Z",
+                "attempt_count": 0,
+                "markers": {},
+                "artifacts": [],
+                "runs": []
+              }
+            }
+          ],
+          "coding_status": "PASSED"
+        }
+      ]
+    },
+    "regression": {
+      "status": "PASSED",
+      "started_at": null,
+      "completed_at": "2026-08-18T09:44:17.769Z",
+      "attempt_count": 0,
+      "markers": {},
+      "artifacts": [],
+      "runs": [],
+      "max_retries": 2,
+      "stages": {
+        "regression": {
+          "status": "PASSED",
+          "started_at": "2026-08-18T09:42:52.588Z",
+          "completed_at": "2026-08-18T09:44:17.769Z",
+          "attempt_count": 0,
+          "markers": {
+            "failed_tests": [],
+            "attribution": "none",
+            "marker_outcome": "PASSED",
+            "completed": true,
+            "self_validated": true
+          },
+          "artifacts": [
+            "/data/src/tile-server/specs/20260818-165553-2i5b/regression-conclusion.md"
+          ],
+          "runs": [
+            {
+              "agent_type": "regression-runner",
+              "agent_id": "cli-1787046257771",
+              "outcome": "PASSED",
+              "started_at": "2026-08-18T09:42:52.588Z",
+              "stopped_at": "2026-08-18T09:44:17.771Z",
+              "exit_status": "completed",
+              "source": "update-state"
+            }
+          ]
+        },
+        "fix": {
+          "status": "PENDING",
+          "started_at": null,
+          "completed_at": null,
+          "attempt_count": 0,
+          "markers": {},
+          "artifacts": [],
+          "runs": []
+        },
+        "testing": {
+          "status": "PENDING",
+          "started_at": null,
+          "completed_at": null,
+          "attempt_count": 0,
+          "markers": {},
+          "artifacts": [],
+          "runs": []
+        },
+        "review": {
+          "status": "PENDING",
+          "started_at": null,
+          "completed_at": null,
+          "attempt_count": 0,
+          "markers": {},
+          "artifacts": [],
+          "runs": []
+        }
+      }
+    },
+    "evidence-verify": {
+      "status": "PASSED",
+      "started_at": null,
+      "completed_at": "2026-08-18T09:46:44.050Z",
+      "attempt_count": 0,
+      "markers": {
+        "evidence_decision": "PASS",
+        "evidence_summary": "Build (make.py) exit 0 and 18/18 gtest PASS confirmed independently; all 6 ACs traced to passing tests; git changed-file set matches job-manifest.json; no CRITICAL/HIGH findings.",
+        "evidence_commands": "git status, python make.py, ./tile-server --gtest, grep symbols/weakening scan",
+        "evidence_risks": "End-to-end FastCGI verification was run by the Wave 1 testing stage against sample data (production 6.2GB map.db and nginx HTTP binary absent in this environment); unit-level coverage for the same behaviors passes in this run.",
+        "marker_outcome": "PASSED",
+        "completed": true,
+        "self_validated": true
+      },
+      "artifacts": [
+        "/data/src/tile-server/specs/20260818-165553-2i5b/verification-report.md"
+      ],
+      "runs": [
+        {
+          "agent_type": "evidence-verifier",
+          "agent_id": "cli-1787046404055",
+          "outcome": "PASSED",
+          "started_at": "2026-08-18T09:46:44.055Z",
+          "stopped_at": "2026-08-18T09:46:44.055Z",
+          "exit_status": "completed",
+          "source": "update-state"
+        }
+      ],
+      "changed_files_snapshot": [
+        "rc/data_table.cpp",
+        "src/data_table.h",
+        "src/ndtp_response.cpp",
+        "src/ndtp_response.h",
+        "src/server_config.cpp",
+        "src/server_config.h",
+        "src/server_config_unittest.cpp",
+        "src/tile_service.cpp",
+        "src/tile_service.h",
+        "specs/",
+        "src/data_table_checkfields_unittest.cpp",
+        "src/ndtp_response_unittest.cpp"
+      ],
+      "reverify_hash": null
+    }
+  },
+  "completion_blocked": false,
+  "completion_block_reason": null
+}

@@ -1,0 +1,125 @@
+{
+  "ts": "20260714-162521-zxp6",
+  "jobs": [
+    {
+      "id": "J0-1",
+      "agent_type": "implementer",
+      "description": "Create Vite+React+TypeScript project scaffold, type definitions, and constants",
+      "files": [
+        "package.json",
+        "tsconfig.json",
+        "vite.config.ts",
+        "index.html",
+        "src/vite-env.d.ts",
+        "src/types/game.ts"
+      ],
+      "depends_on": [],
+      "produces": ["types.json"]
+    },
+    {
+      "id": "J1-1",
+      "agent_type": "implementer",
+      "description": "Implement board operations, win detection, forbidden move rules, AI evaluation function, and Alpha-Beta minimax search",
+      "files": [
+        "src/core/board.ts",
+        "src/core/rules.ts",
+        "src/core/evaluate.ts",
+        "src/core/ai.ts",
+        "src/core/index.ts"
+      ],
+      "depends_on": ["J0-1"],
+      "produces": ["core-logic.json"]
+    },
+    {
+      "id": "J2-1",
+      "agent_type": "implementer",
+      "description": "Wrap AI engine in a Web Worker for non-blocking computation with timeout and crash recovery",
+      "files": [
+        "src/worker/ai.worker.ts"
+      ],
+      "depends_on": ["J1-1"],
+      "produces": ["ai-worker.js"]
+    },
+    {
+      "id": "J2-2",
+      "agent_type": "implementer",
+      "description": "Create React Context + useReducer for game state management with all actions (PLACE_STONE, AI_MOVE, UNDO, RESIGN, RESTART, SET_DIFFICULTY, SET_PROCESSING)",
+      "files": [
+        "src/hooks/useGame.ts"
+      ],
+      "depends_on": ["J0-1", "J1-1"],
+      "produces": ["game-context.json"]
+    },
+    {
+      "id": "J3-1",
+      "agent_type": "implementer",
+      "description": "Implement useAI hook for Web Worker lifecycle management: spawn, message passing, cancel, crash retry, and timeout handling",
+      "files": [
+        "src/hooks/useAI.ts"
+      ],
+      "depends_on": ["J0-1", "J2-1"],
+      "produces": ["hooks.json"]
+    },
+    {
+      "id": "J4-1",
+      "agent_type": "implementer",
+      "description": "Implement Board and Stone components with click handling, last-move marker, forbidden move marker, and win highlight",
+      "files": [
+        "src/components/Board.tsx",
+        "src/components/Stone.tsx",
+        "src/styles/Board.module.css"
+      ],
+      "depends_on": ["J0-1", "J2-2"],
+      "produces": []
+    },
+    {
+      "id": "J4-2",
+      "agent_type": "implementer",
+      "description": "Implement GameInfo panel, Controls (Undo/Resign/Restart), and DifficultySelector with correct disable/enable states",
+      "files": [
+        "src/components/GameInfo.tsx",
+        "src/components/Controls.tsx",
+        "src/components/DifficultySelector.tsx",
+        "src/styles/Controls.module.css"
+      ],
+      "depends_on": ["J0-1", "J2-2"],
+      "produces": []
+    },
+    {
+      "id": "J4-3",
+      "agent_type": "implementer",
+      "description": "Implement GameOverDialog for win/loss/draw outcomes with Play Again action",
+      "files": [
+        "src/components/GameOverDialog.tsx"
+      ],
+      "depends_on": ["J0-1", "J2-2"],
+      "produces": []
+    },
+    {
+      "id": "J5-1",
+      "agent_type": "implementer",
+      "description": "Assemble App root component composing board, controls, info panel, difficulty selector, and game-over dialog; wire to game state and AI hook; add responsive layout and entry point",
+      "files": [
+        "src/App.tsx",
+        "src/App.module.css",
+        "src/main.tsx"
+      ],
+      "depends_on": ["J4-1", "J4-2", "J4-3", "J2-2", "J3-1"],
+      "produces": []
+    }
+  ],
+  "shared_contracts": [
+    "Player type: 1 (black / human) | 2 (white / AI). CellState: 0 (empty) | 1 | 2. Board: CellState[15][15].",
+    "Position: { row: number, col: number } with row,col in [0, 14].",
+    "Difficulty: 'easy' | 'medium' | 'hard'.",
+    "GamePhase: 'idle' | 'playing' | 'ended'.",
+    "GameState: { board, history: { board, lastMove }[], currentPlayer: 1|2, phase: GamePhase, winner: 0|1|2, winPositions: Position[], isProcessing: boolean, forbiddenMove: Position | null, moveCount: number, difficulty: Difficulty }.",
+    "GameAction union: PLACE_STONE(pos), FORBIDDEN_MOVE(pos), AI_MOVE(pos), UNDO, RESIGN, RESTART, SET_DIFFICULTY(difficulty), SET_PHASE(phase), SET_PROCESSING(isProcessing).",
+    "Worker request: { type: 'compute', board: Board, difficulty: Difficulty, player: 1|2 } | { type: 'cancel' }.",
+    "Worker response: { type: 'result', position: Position, score: number, depth: number } | { type: 'thinking', status: 'start' | 'searching' | 'done' }.",
+    "ForbiddenMoveType: 'san-san' | 'si-si' | 'overline' | null. Only enforced for black (player).",
+    "Difficulty config: Easy depth=1 attackWeight=0.3 defenseWeight=0.7 timeout=100ms; Medium depth=2-3 equal weights timeout=500ms; Hard depth=4-5 attackWeight=0.6 defenseWeight=0.4 timeout=3000ms.",
+    "Win detection: 4 directions (horizontal, vertical, diagonal-left, diagonal-right); >=5 consecutive same-color stones wins; returns winning positions array for highlight.",
+    "Context API: GameProvider wraps children, provides { state, dispatch } via useContext. useGame() hook returns { state, dispatch }."
+  ]
+}
